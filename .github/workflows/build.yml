@@ -19,14 +19,16 @@ jobs:
 
       - name: Install Theos
         run: |
-          git clone --depth=1 --recursive https://github.com/theos/theos.git /opt/theos
-          echo "THEOS=/opt/theos" >> $GITHUB_ENV
-          echo "/opt/theos/bin" >> $GITHUB_PATH
+          # Apple Silicon runner 上 /opt 没有写权限，装到 $HOME
+          export THEOS=$HOME/theos
+          git clone --depth=1 --recursive https://github.com/theos/theos.git $THEOS
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+          echo "$THEOS/bin" >> $GITHUB_PATH
           # Theos 不自带 iOS SDK，补上避免 TARGET=16.0 找不到精确版本
-          mkdir -p /opt/theos/sdks
+          mkdir -p $THEOS/sdks
           curl -sL https://github.com/theos/sdks/archive/master.tar.gz -o /tmp/sdks.tar.gz
-          tar xf /tmp/sdks.tar.gz -C /opt/theos/sdks --strip-components=1
-          ls /opt/theos/sdks
+          tar xf /tmp/sdks.tar.gz -C $THEOS/sdks --strip-components=1
+          ls $THEOS/sdks
 
       - name: Show Xcode/SDK versions
         run: |
