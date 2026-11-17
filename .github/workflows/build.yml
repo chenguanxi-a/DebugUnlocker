@@ -10,54 +10,7 @@ on:
       - .github/workflows/build.yml
 
 jobs:
-  # Linux + Theos：ubuntu runner 通常秒级分配，作为主力构建通道
-  build-linux:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make git curl libssl-dev libxml2-dev libplist-utils \
-            pkg-config libcurl4-openssl-dev zlib1g-dev clang lld
-
-      - name: Install Theos
-        run: |
-          export THEOS=$HOME/theos
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
-          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-          echo "$HOME/theos/bin" >> $GITHUB_PATH
-          ls $HOME/theos/bin || true
-
-      - name: Install iOS SDKs
-        run: |
-          mkdir -p $THEOS/sdks
-          curl -sL https://github.com/theos/sdks/archive/master.tar.gz -o /tmp/sdks.tar.gz
-          tar xf /tmp/sdks.tar.gz -C $THEOS/sdks --strip-components=1
-          ls $THEOS/sdks
-
-      - name: Build Tweak
-        run: |
-          make clean
-          make          # 只编译 dylib（不打包 .deb）
-          mkdir -p artifacts
-          find .theos/obj -name "*.dylib" -exec cp -f {} artifacts/DebugUnlocker.dylib \;
-          ls -la artifacts/
-          test -s artifacts/DebugUnlocker.dylib
-          file artifacts/DebugUnlocker.dylib
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DebugUnlocker-dylib-linux
-          path: artifacts/DebugUnlocker.dylib
-          retention-days: 30
-
-  # macOS 原生 Xcode 环境（runner 排队时可能很慢，保留作备用通道）
-  build-macos:
+  build:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -90,7 +43,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           make clean
-          make
+          make          # 只编译 dylib（不打包 .deb，避免依赖 dpkg-deb）
           mkdir -p artifacts
           find .theos/obj -name "*.dylib" -exec cp -f {} artifacts/DebugUnlocker.dylib \;
           ls -la artifacts/
@@ -100,6 +53,6 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DebugUnlocker-dylib-macos
+          name: DebugUnlocker-dylib
           path: artifacts/DebugUnlocker.dylib
           retention-days: 30
