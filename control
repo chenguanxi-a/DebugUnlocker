@@ -1,0 +1,9 @@
+Package: com.littlecodesauce.debugunlocker
+Name: DebugUnlocker
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: One-tap unlock VIP/remove ads for 无限轮回 (Unity iOS) via UserDefaults injection. Supports: no_ads, vip, premium, pro, subscription, unlimited coins/gems. Trigger: 3-finger long-press or 5x tap top-right.
+Maintainer: Little Code Sauce <yg@local>
+Author: Little Code Sauce
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 14.0)

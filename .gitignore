@@ -1,0 +1,11 @@
+# Theos 编译中间产物
+.theos/
+packages/
+artifacts/
+*.deb
+*.dylib
+
+# 系统/编辑器杂项
+.DS_Store
+Thumbs.db
+*.swp
