@@ -3,7 +3,7 @@
 # GitHub Actions 会自动运行 make package 并提取 .dylib
 
 export THEOS_DEVICE_IP = 
-export TARGET = iphone:clang:16.0:14.0
+export TARGET = iphone:clang:latest:14.0
 export ARCHS = arm64 arm64e
 export DEBUG = 0
 export FINALPACKAGE = 1
