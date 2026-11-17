@@ -24,11 +24,15 @@ jobs:
           git clone --depth=1 --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
           echo "$THEOS/bin" >> $GITHUB_PATH
-          # Theos 不自带 iOS SDK，补上避免 TARGET=16.0 找不到精确版本
+          # Theos 不自带 iOS SDK，补上避免 TARGET 找不到精确版本
           mkdir -p $THEOS/sdks
           curl -sL https://github.com/theos/sdks/archive/master.tar.gz -o /tmp/sdks.tar.gz
           tar xf /tmp/sdks.tar.gz -C $THEOS/sdks --strip-components=1
           ls $THEOS/sdks
+          # Theos 签名的 dylib 需要 ldid，仓库里不带，单独下载
+          curl -sL https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_macosx_arm64 -o $THEOS/bin/ldid
+          chmod +x $THEOS/bin/ldid
+          $THEOS/bin/ldid -h > /dev/null 2>&1 || echo "ldid 可能不可用"
 
       - name: Show Xcode/SDK versions
         run: |
@@ -39,13 +43,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           make clean
-          make package   # 生成 .deb
-          # 同时把 .dylib 单独拷出来
+          make          # 只编译 dylib（不打包 .deb，避免依赖 dpkg-deb）
           mkdir -p artifacts
-          cp -f .theos/obj/debug/*.dylib artifacts/DebugUnlocker.dylib 2>/dev/null || true
-          cp -f .theos/obj/arm64/*.dylib artifacts/DebugUnlocker.dylib 2>/dev/null || true
-          find .theos/obj -name "*.dylib" -exec cp -f {} artifacts/DebugUnlocker.dylib \; 2>/dev/null || true
+          find .theos/obj -name "*.dylib" -exec cp -f {} artifacts/DebugUnlocker.dylib \;
           ls -la artifacts/
+          # 必须真的产出 dylib，否则明确失败，不要静默成功
+          test -s artifacts/DebugUnlocker.dylib
+          file artifacts/DebugUnlocker.dylib
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
