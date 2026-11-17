@@ -77,6 +77,52 @@ static inline void WriteAllKeys()
     NSLog(@"[DebugUnlocker] ✅ Written %lu native keys + Unity prefixes + IAP order + notifications", (unsigned long)kUserDefaultsKeys.count);
 }
 
+// ====== 动态 Swizzle 用的 C 函数 ======
+// 顶层不能直接写 ObjC 方法（会报 missing context for method declaration），
+// 这里用 C 函数实现 IMP，再用 class_addMethod 挂到运行时找到的 AppController 上。
+static BOOL (*gOrigDidFinishLaunching)(id, SEL, UIApplication *, NSDictionary *) = NULL;
+
+static void HookGesture(id self, SEL _cmd, UIGestureRecognizer *g)
+{
+    if (g.state == UIGestureRecognizerStateBegan) WriteAllKeys();
+}
+
+static void HookTap(id self, SEL _cmd, UIButton *sender)
+{
+    sender.tag++;
+    if (sender.tag >= 5) { WriteAllKeys(); sender.tag = 0; }
+}
+
+static BOOL HookDidFinishLaunching(id self, SEL _cmd, UIApplication *app, NSDictionary *opts)
+{
+    BOOL ret = gOrigDidFinishLaunching ? gOrigDidFinishLaunching(self, _cmd, app, opts) : YES;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *win = [UIApplication sharedApplication].keyWindow;
+        if (!win) return;
+
+        // 三指长按 1s
+        UILongPressGestureRecognizer *lpgr = [[UILongPressGestureRecognizer alloc]
+            initWithTarget:self action:@selector(debugUnlockGesture:)];
+        lpgr.numberOfTouchesRequired = 3;
+        lpgr.minimumPressDuration = 1.0f;
+        lpgr.allowableMovement = 50;
+        [win addGestureRecognizer:lpgr];
+
+        // 右上角隐形按钮五连击
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.frame = CGRectMake(win.bounds.size.width - 22, 22, 22, 22);
+        btn.alpha = 0.01f;
+        btn.tag = 0;
+        [btn addTarget:self action:@selector(debugUnlockTap:) forControlEvents:UIControlEventTouchUpInside];
+        [win addSubview:btn];
+
+        NSLog(@"[DebugUnlocker] 🎮 Ready: 3-finger long-press OR 5×tap top-right");
+    });
+
+    return ret;
+}
+
 // ====== Hook 入口 ======
 __attribute__((constructor))
 static void InstallHook()
@@ -102,44 +148,17 @@ static void InstallHook()
 
     SEL sel = @selector(application:didFinishLaunchingWithOptions:);
     Method orig = class_getInstanceMethod(targetCls, sel);
-    if (!orig) return;
+    if (!orig) { NSLog(@"[DebugUnlocker] ❌ didFinishLaunching: not found on %s", class_getName(targetCls)); return; }
+
+    gOrigDidFinishLaunching = (BOOL (*)(id, SEL, UIApplication *, NSDictionary *))method_getImplementation(orig);
 
     class_addMethod(targetCls, @selector(xxx_didFinishLaunchingWithOptions:),
-                    method_getImplementation(orig), method_getTypeEncoding(orig));
+                    (IMP)HookDidFinishLaunching, method_getTypeEncoding(orig));
+    class_addMethod(targetCls, @selector(debugUnlockGesture:), (IMP)HookGesture, "v@:@");
+    class_addMethod(targetCls, @selector(debugUnlockTap:), (IMP)HookTap, "v@:@");
+
     method_exchangeImplementations(orig,
         class_getInstanceMethod(targetCls, @selector(xxx_didFinishLaunchingWithOptions:)));
+
+    NSLog(@"[DebugUnlocker] ✅ Hooked %s application:didFinishLaunchingWithOptions:", class_getName(targetCls));
 }
-
-- (BOOL)xxx_didFinishLaunchingWithOptions:(UIApplication *)app launchOptions:(NSDictionary *)opts
-{
-    BOOL ret = [self xxx_didFinishLaunchingWithOptions:app launchOptions:opts];
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *win = [UIApplication sharedApplication].keyWindow;
-        if (!win) return;
-
-        // 三指长按
-        UILongPressGestureRecognizer *lpgr = [[UILongPressGestureRecognizer alloc]
-            initWithTarget:self action:@selector(debugUnlockGesture:)];
-        lpgr.numberOfTouchesRequired = 3;
-        lpgr.minimumPressDuration = 1.0f;
-        lpgr.allowableMovement = 50;
-        [win addGestureRecognizer:lpgr];
-
-        // 右上角隐形按钮五连击
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        btn.frame = CGRectMake(win.bounds.size.width - 22, 22, 22, 22);
-        btn.alpha = 0.01f;
-        btn.tag = 0;
-        [btn addTarget:self action:@selector(debugUnlockTap:) forControlEvents:UIControlEventTouchUpInside];
-        [win addSubview:btn];
-
-        NSLog(@"[DebugUnlocker] 🎮 Ready: 3-finger long-press OR 5×tap top-right");
-    });
-
-    return ret;
-}
-
-- (void)debugUnlockGesture:(UIGestureRecognizer *)g { if (g.state == UIGestureRecognizerStateBegan) WriteAllKeys(); }
-
-- (void)debugUnlockTap:(UIButton *)sender { sender.tag++; if (sender.tag >= 5) { WriteAllKeys(); sender.tag = 0; } }
